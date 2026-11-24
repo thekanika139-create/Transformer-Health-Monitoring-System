@@ -1,0 +1,192 @@
+{
+  "model_file": "thms_lgbm.joblib",
+  "model_type": "lightgbm.Booster",
+  "feature_names": [
+    "input_current_A",
+    "output_current_A",
+    "output_voltage_V",
+    "ambient_temp_C",
+    "humidity_pct",
+    "vibration_rms_ms2",
+    "h2_ppm",
+    "oil_temp_C",
+    "load_pu",
+    "oil_rise",
+    "in_out_resid",
+    "abs_in_out_resid",
+    "vib_ratio",
+    "d_h2",
+    "d_oil_temp",
+    "d_load",
+    "d_vib",
+    "d_abs_resid",
+    "volt_dev",
+    "d_volt",
+    "h2_rate_ppm_per_day",
+    "oil_temp_slope_C_per_h",
+    "vib_roll_mean",
+    "h2_roll_max"
+  ],
+  "monotone_decreasing": [
+    "d_h2",
+    "d_oil_temp",
+    "d_load",
+    "d_vib",
+    "d_abs_resid",
+    "d_volt",
+    "volt_dev",
+    "h2_rate_ppm_per_day",
+    "oil_temp_C",
+    "vibration_rms_ms2",
+    "vib_roll_mean",
+    "load_pu",
+    "abs_in_out_resid"
+  ],
+  "monotone_constraints": {
+    "input_current_A": 0,
+    "output_current_A": 0,
+    "output_voltage_V": 0,
+    "ambient_temp_C": 0,
+    "humidity_pct": 0,
+    "vibration_rms_ms2": -1,
+    "h2_ppm": 0,
+    "oil_temp_C": -1,
+    "load_pu": -1,
+    "oil_rise": 0,
+    "in_out_resid": 0,
+    "abs_in_out_resid": -1,
+    "vib_ratio": 0,
+    "d_h2": -1,
+    "d_oil_temp": -1,
+    "d_load": -1,
+    "d_vib": -1,
+    "d_abs_resid": -1,
+    "volt_dev": -1,
+    "d_volt": -1,
+    "h2_rate_ppm_per_day": -1,
+    "oil_temp_slope_C_per_h": 0,
+    "vib_roll_mean": -1,
+    "h2_roll_max": 0
+  },
+  "feature_contri": {
+    "input_current_A": 2.0,
+    "output_current_A": 2.0,
+    "output_voltage_V": 1.0,
+    "ambient_temp_C": 1.0,
+    "humidity_pct": 1.0,
+    "vibration_rms_ms2": 0.8,
+    "h2_ppm": 0.8,
+    "oil_temp_C": 1.25,
+    "load_pu": 2.0,
+    "oil_rise": 1.25,
+    "in_out_resid": 2.0,
+    "abs_in_out_resid": 2.0,
+    "vib_ratio": 0.8,
+    "d_h2": 0.8,
+    "d_oil_temp": 1.25,
+    "d_load": 2.0,
+    "d_vib": 0.8,
+    "d_abs_resid": 2.0,
+    "volt_dev": 1.0,
+    "d_volt": 1.0,
+    "h2_rate_ppm_per_day": 0.8,
+    "oil_temp_slope_C_per_h": 1.25,
+    "vib_roll_mean": 0.8,
+    "h2_roll_max": 0.8
+  },
+  "feature_gain_multipliers": {
+    "voltage": 1.0,
+    "current": 2.0,
+    "h2": 0.8,
+    "vibration": 0.8,
+    "oil_temperature": 1.25
+  },
+  "oil_overheat_C": 125.0,
+  "feature_window": 24,
+  "sample_period_h": 0.25,
+  "score_range": [
+    0.0,
+    100.0
+  ],
+  "band_edges": {
+    "normal_above": 75.0,
+    "caution_from": 50.0,
+    "warning_from": 25.0
+  },
+  "band_rule": "score > normal_above: 0 Normal; caution_from <= score <= normal_above: 1 Caution; warning_from <= score < caution_from: 2 Warning; score < warning_from: 3 Critical",
+  "state_names": {
+    "0": "Normal",
+    "1": "Caution",
+    "2": "Warning",
+    "3": "Critical"
+  },
+  "hyperparameters": {
+    "objective": "regression",
+    "subsample_freq": 1,
+    "monotone_constraints_method": "intermediate",
+    "deterministic": true,
+    "force_row_wise": true,
+    "verbosity": -1,
+    "learning_rate": 0.051383357166415296,
+    "num_leaves": 15,
+    "min_child_samples": 50,
+    "colsample_bytree": 0.7902819704903735,
+    "subsample": 0.6907637396203536,
+    "reg_lambda": 0.997329056969443
+  },
+  "best_iteration": 1437,
+  "random_seed": 42,
+  "tuning": {
+    "n_trials": 20,
+    "n_folds": 5,
+    "top_k": 1,
+    "reused_params": true,
+    "best_cv_rmse": null,
+    "selection_on_val": [
+      {
+        "trial": 1,
+        "cv_rmse": null,
+        "val_rmse": 0.9884365335449142,
+        "best_iteration": 1437,
+        "params": {
+          "learning_rate": 0.051383357166415296,
+          "num_leaves": 15,
+          "min_child_samples": 50,
+          "colsample_bytree": 0.7902819704903735,
+          "subsample": 0.6907637396203536,
+          "reg_lambda": 0.997329056969443
+        }
+      }
+    ]
+  },
+  "fit_data": {
+    "train_rows": 75264,
+    "train_runs": 56,
+    "val_rows": 14784,
+    "val_runs": 11
+  },
+  "val_metrics": {
+    "baseline": {
+      "MAE": 5.382091218255913,
+      "RMSE": 7.420815748996068,
+      "R2": 0.9113370884441754,
+      "state_acc": 0.9665178571428571,
+      "macro_F1": 0.9525690793423139
+    },
+    "model": {
+      "MAE": 0.5170181608420311,
+      "RMSE": 0.9884365335449142,
+      "R2": 0.9984269726656285,
+      "state_acc": 0.9866747835497836,
+      "macro_F1": 0.9751864475471643
+    },
+    "state_acc_ceiling_true_score": 0.9998647186147186
+  },
+  "libraries": {
+    "python": "3.13.5",
+    "lightgbm": "4.7.0",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.1.1",
+    "numpy": "2.2.4"
+  }
+}

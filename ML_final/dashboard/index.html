@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformer Health Monitor</title>
+<script>
+  // apply the saved theme before the first paint (falls back to the system setting)
+  try { const t = localStorage.getItem('thms-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<style>
+  :root {
+    --gap: 18px; --radius: 16px;
+    --bg: #eaf0f7; --bg2: #dfe8f3; --panel: #ffffff; --panel2: #f4f7fb; --ink: #0f1b2d; --muted: #5a6b80; --line: #d9e2ec;
+    --shadow: 0 1px 2px rgba(15,27,45,.05), 0 8px 24px rgba(15,27,45,.06);
+    --s0: #1f9d63; --s1: #d9a400; --s2: #e07b00; --s3: #d23a3a; --sU: #8a96a3;
+    --c1: #2563eb; --c2: #db2777; --c3: #0d9488; --c4: #7c3aed;
+    --band0: rgba(31,157,99,.10); --band1: rgba(217,164,0,.12); --band2: rgba(224,123,0,.13); --band3: rgba(210,58,58,.12);
+    --glow: rgba(37,99,235,.10);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a111e; --bg2: #0d1627; --panel: #121c2f; --panel2: #0e1729; --ink: #e8eef8; --muted: #90a4bf; --line: #22324c;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.35);
+    --s0: #34d399; --s1: #fbbf24; --s2: #fb923c; --s3: #f87171; --sU: #6f7f93;
+    --c1: #60a5fa; --c2: #f472b6; --c3: #2dd4bf; --c4: #a78bfa;
+    --band0: rgba(52,211,153,.10); --band1: rgba(251,191,36,.10); --band2: rgba(251,146,60,.11); --band3: rgba(248,113,113,.13);
+    --glow: rgba(96,165,250,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a111e; --bg2: #0d1627; --panel: #121c2f; --panel2: #0e1729; --ink: #e8eef8; --muted: #90a4bf; --line: #22324c;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.35);
+      --s0: #34d399; --s1: #fbbf24; --s2: #fb923c; --s3: #f87171; --sU: #6f7f93;
+      --c1: #60a5fa; --c2: #f472b6; --c3: #2dd4bf; --c4: #a78bfa;
+      --band0: rgba(52,211,153,.10); --band1: rgba(251,191,36,.10); --band2: rgba(251,146,60,.11); --band3: rgba(248,113,113,.13);
+      --glow: rgba(96,165,250,.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); min-height: 100vh;
+         background: radial-gradient(1100px 520px at 12% -8%, var(--glow), transparent 60%),
+                     radial-gradient(900px 480px at 100% 0%, var(--glow), transparent 55%), var(--bg);
+         font: 15px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif; }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 28px;
+           background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(8px);
+           border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff;
+          background: linear-gradient(135deg, var(--c1), var(--c4)); box-shadow: 0 6px 16px rgba(37,99,235,.28); }
+  .logo svg { width: 22px; height: 22px; }
+  .brand h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -.01em; line-height: 1.1; }
+  .brand small { color: var(--muted); font-size: 12px; }
+  .hright { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 13px; }
+  .mode { font-size: 12px; padding: 3px 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel2); }
+  .mode.sim { color: var(--s2); border-color: var(--s2); }
+  .conn { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--sU); }
+  .dot.on { background: var(--s0); box-shadow: 0 0 0 4px color-mix(in srgb, var(--s0) 22%, transparent); }
+  select, .btn { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 9px; border: 1px solid var(--line);
+                 background: var(--panel2); color: var(--ink); cursor: pointer; }
+  .btn:hover, select:hover { border-color: var(--c1); }
+
+  /* ---------- layout: every row uses the same gap ---------- */
+  main { max-width: 1480px; margin: 0 auto; padding: 22px 28px 34px; display: grid; gap: var(--gap); }
+  .hero, .charts, .foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--gap); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+           padding: 16px 18px; min-width: 0; }
+  .ph { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .07em;
+        text-transform: uppercase; color: var(--muted); }
+  .ph::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: linear-gradient(135deg, var(--c1), var(--c4)); }
+
+  .notes { border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 8px 14px; font-size: 13px; color: var(--muted); }
+  .notes summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+  .notes summary::before { content: "!"; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+                           background: var(--s1); color: #1b1300; font-weight: 800; font-size: 12px; }
+  .notes b { color: var(--ink); }
+  .notes ul { margin: 8px 0 2px; padding-left: 22px; }
+
+  /* ---------- hero 1: score gauge ---------- */
+  .score-panel { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .score-panel .ph { align-self: flex-start; }
+  .score-panel { justify-content: center; }
+  .score-panel .num { font-size: 96px; line-height: 1; font-weight: 760; margin: 6px 0 14px;
+                      letter-spacing: -.04em; font-variant-numeric: tabular-nums; transition: color .4s; }
+  .score-panel .num small { font-size: 24px; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .pill { margin-top: 2px; padding: 5px 22px; border-radius: 99px; font-weight: 700; font-size: 15px; letter-spacing: .02em; color: #fff;
+          background: var(--sU); transition: background .4s; }
+  .meta { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .count { margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 99px;
+           background: var(--panel2); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .count i { width: 7px; height: 7px; border-radius: 50%; background: var(--c1); animation: pulse 1.6s infinite; }
+  .score-panel.crit { border-color: var(--s3); animation: glow 1.8s infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  @keyframes glow { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--s3) 30%, transparent), var(--shadow); } }
+
+  /* ---------- hero 2: reasons ---------- */
+  .reasons { display: grid; gap: 14px; }
+  .reason .row { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .reason .row b { font-variant-numeric: tabular-nums; }
+  .reason .bar { height: 9px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line); margin-top: 6px; position: relative; overflow: hidden; }
+  .reason .bar::after { content: ""; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--line); }
+  .reason .bar i { position: absolute; top: 0; bottom: 0; border-radius: 6px; transition: width .6s; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+  .empty { color: var(--muted); font-size: 14px; }
+
+  /* ---------- hero 3: flags + values ---------- */
+  .status-panel { --sc: var(--sU); transition: background .5s, border-color .5s, box-shadow .5s;
+                  border-color: color-mix(in srgb, var(--sc) 70%, var(--line));
+                  background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 20%, var(--panel)) 0%, color-mix(in srgb, var(--sc) 7%, var(--panel)) 100%);
+                  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sc) 35%, transparent), var(--shadow); }
+  .status-panel .ph { color: color-mix(in srgb, var(--sc) 60%, var(--muted)); }
+  .status-panel .vals { border-top-color: color-mix(in srgb, var(--sc) 40%, var(--line)); }
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .chip { text-align: center; padding: 8px 4px; border-radius: 11px; border: 1px solid var(--line); background: var(--panel2);
+          font-size: 12.5px; font-weight: 650; color: var(--muted); transition: all .3s; }
+  .chip.on { color: #fff; border-color: transparent; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+  .checks { margin-top: 10px; font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; }
+  .checks b { color: var(--ink); }
+  .vals { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 13px; }
+  .vals .it { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+  .vals .it span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vals .it b { font-variant-numeric: tabular-nums; }
+  .vals h3 { grid-column: 1 / -1; margin: 0 0 2px; font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+
+  /* ---------- kpi cards ---------- */
+  .kpi { padding: 14px 16px 10px; position: relative; overflow: hidden; }
+  .kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--kc, var(--c1)); }
+  .kpi .top { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+  .kpi .ic { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--kc, var(--c1));
+             background: color-mix(in srgb, var(--kc, var(--c1)) 14%, transparent); }
+  .kpi .ic svg { width: 17px; height: 17px; }
+  .kpi .v { font-size: 27px; font-weight: 720; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 6px; line-height: 1.1; }
+  .kpi .v span { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .kpi .sub { font-size: 12px; color: var(--muted); min-height: 17px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi svg.spark { display: block; width: 100%; height: 26px; margin-top: 4px; }
+
+  /* ---------- charts ---------- */
+  .chart { position: relative; height: 215px; }
+
+  /* ---------- footer: model quality ---------- */
+  .stat { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; }
+  .stat .big { font-size: 32px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .lab { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .stat .side { text-align: right; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stat .side b { color: var(--ink); }
+  .params { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .tag { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .tag b { color: var(--ink); font-weight: 650; }
+  .foot-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: -4px; }
+
+  :focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+  @media (max-width: 1280px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 1100px) { .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero .score-panel { grid-column: 1 / -1; } }
+  @media (max-width: 860px) { .foot { grid-template-columns: 1fr; } .stat .params { justify-content: flex-start; } }
+  @media (max-width: 700px) {
+    header, main { padding-left: 14px; padding-right: 14px; }
+    .hero, .charts { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .score-panel .num { font-size: 78px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+    <div><h1>Transformer Health Monitor</h1><small>THMS &middot; machine-learning health score</small></div>
+  </div>
+  <div class="hright">
+    <span class="mode" id="mode">live</span>
+    <label for="range">Chart range</label>
+    <select id="range">
+      <option value="300">5 minutes</option>
+      <option value="600" selected>10 minutes</option>
+      <option value="1800">30 minutes</option>
+      <option value="3600">1 hour</option>
+    </select>
+    <button class="btn" id="theme" title="Switch light / dark">Light / Dark</button>
+    <div class="conn"><span class="dot" id="dot"></span><span id="connText">connecting...</span></div>
+  </div>
+</header>
+
+<main>
+  <details class="notes" id="banner" hidden><summary id="bannerTitle"><b>Read before trusting the score</b></summary><ul id="bannerList"></ul></details>
+
+  <!-- row 1: score | reasons | flags + values -->
+  <section class="hero">
+    <div class="panel score-panel" id="scorePanel">
+      <h2 class="ph">Health score</h2>
+      <div class="num" id="score" aria-live="polite">--<small>/100</small></div>
+      <div class="meta" id="scoreMeta">The first score arrives after the first window completes.</div>
+      <div class="count"><i></i><span id="countdown">--</span></div>
+    </div>
+
+    <div class="panel">
+      <h2 class="ph">Why this score</h2>
+      <div class="reasons" id="reasons"><div class="empty">Waiting for the first score.</div></div>
+      <div class="hint">Bars show the points each driver adds (green) or removes (red) compared with the model's average prediction.</div>
+    </div>
+
+    <div class="panel status-panel" id="statusPanel">
+      <h2 class="ph">Status flag</h2>
+      <div class="chips" id="chips"></div>
+      <div class="checks" id="limits"></div>
+      <div class="vals" id="packet"></div>
+    </div>
+  </section>
+
+  <!-- row 2: six small cards -->
+  <section class="kpis" id="kpis"></section>
+
+  <!-- rows 3-4: six charts -->
+  <section class="charts" id="charts"></section>
+
+  <!-- row 5: model quality -->
+  <section class="foot">
+    <div class="panel stat">
+      <div><div class="big" id="mAcc">--</div><div class="lab">Model accuracy &middot; health state</div></div>
+      <div class="side" id="mAccSide">validation</div>
+    </div>
+    <div class="panel stat">
+      <div><div class="big" id="mF1">--</div><div class="lab">F1 score &middot; macro average</div></div>
+      <div class="side" id="mF1Side">validation</div>
+    </div>
+    <div class="panel stat">
+      <div style="min-width:78px"><div class="big" style="font-size:20px">Model</div><div class="lab">Parameters</div></div>
+      <div class="params" id="mParams"></div>
+    </div>
+  </section>
+  <div class="foot-note" id="footNote"></div>
+</main>
+
+<script src="/static/chart.umd.js"></script>
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const STATE_COLOR = [css('--s0'), css('--s1'), css('--s2'), css('--s3')];
+const fmtT = ts => new Date(ts * 1000).toLocaleTimeString([], {hour12: false});
+const $ = id => document.getElementById(id);
+const num = (v, dp) => (v == null || !isFinite(v)) ? '--' : Number(v).toFixed(dp);
+const rgba = (hex, a) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex); return m ? `rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})` : hex; };
+
+let H = [];            // 1-second readings
+let P = [];            // scores
+let meta = {window_start: 0, predict_interval: 900, serverOffset: 0};
+let range = 600;
+
+// ---------- theme ----------
+$('theme').addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  try { localStorage.setItem('thms-theme', cur === 'dark' ? 'light' : 'dark'); } catch (e) {}
+  location.reload();
+});
+
+// ---------- state chips ----------
+const STATE_NAMES = ['Normal', 'Caution', 'Warning', 'Critical'];
+$('chips').innerHTML = STATE_NAMES.map((n, i) => `<div class="chip" id="chip${i}">${n}</div>`).join('');
+
+// ---------- kpi cards ----------
+const ICON = {
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  wave: '<path d="M2 12c2-7 4-7 6 0s4 7 6 0 4-7 6 0"/>',
+  vib: '<path d="M2 12h3l2-6 4 12 3-9 2 3h6"/>',
+  therm: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/>',
+  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  sun: '<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+};
+const KPIS = [
+  {id: 'voltage', label: 'Voltage', unit: 'V', dp: 1, key: 'voltage', icon: 'bolt', color: '--c1'},
+  {id: 'current', label: 'Current', unit: 'A', dp: 3, key: 'current', icon: 'wave', color: '--c2', sub: r => `Apparent power ${num(r.power_va, 2)} VA`},
+  {id: 'vibration', label: 'Vibration RMS', unit: 'm/s²', dp: 3, key: 'vibration', icon: 'vib', color: '--c3'},
+  {id: 'oil', label: 'Winding / oil temp', unit: '°C', dp: 1, key: 'oil_temp', icon: 'therm', color: '--s2'},
+  {id: 'h2', label: 'Hydrogen (H2)', unit: 'ppm', dp: 1, key: 'h2', icon: 'drop', color: '--c4'},
+  {id: 'ambient', label: 'Ambient temp', unit: '°C', dp: 1, key: 'ambient', icon: 'sun', color: '--c1', sub: r => `${num(r.humidity, 0)}% RH · ${num(r.pressure, 0)} hPa`},
+];
+$('kpis').innerHTML = KPIS.map(k => `
+  <div class="panel kpi" style="--kc: var(${k.color})">
+    <div class="top"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[k.icon]}</svg></span>${k.label}</div>
+    <div class="v" id="k_${k.id}">--<span>${k.unit}</span></div>
+    <div class="sub" id="s_${k.id}">&nbsp;</div>
+    <svg class="spark" viewBox="0 0 100 26" preserveAspectRatio="none"><polyline id="p_${k.id}" fill="none" stroke="var(${k.color})" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points=""/></svg>
+  </div>`).join('');
+
+function updateCards(r) {
+  const tail = H.slice(-60);
+  for (const k of KPIS) {
+    $('k_' + k.id).innerHTML = num(r[k.key], k.dp) + `<span>${k.unit}</span>`;
+    if (k.sub) $('s_' + k.id).textContent = k.sub(r);
+    const vals = tail.map(x => x[k.key]).filter(v => v != null);
+    if (vals.length > 1) {
+      const lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+      $('p_' + k.id).setAttribute('points', vals.map((v, i) =>
+        `${(i / (vals.length - 1) * 100).toFixed(1)},${(23 - (v - lo) / span * 20).toFixed(1)}`).join(' '));
+    }
+  }
+}
+
+// ---------- charts ----------
+Chart.defaults.animation = false;
+Chart.defaults.font.family = '"Segoe UI", system-ui, sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.color = css('--muted');
+Chart.defaults.borderColor = css('--line');
+
+// one entry per live chart: [key in the tick event, legend label, colour variable]; optional ymin and dashed limit lines `refs`
+const SPECS = [
+  {id: 'voltage', title: 'Voltage (V)', series: [['voltage', 'Voltage', '--c1']]},
+  {id: 'current', title: 'Current (A)', series: [['current', 'Current', '--c2']]},
+  {id: 'vib', title: 'Vibration RMS (m/s²)', series: [['vibration', 'Vibration', '--c3']]},
+  {id: 'temp', title: 'Temperature (°C)', series: [['oil_temp', 'Winding / oil', '--s2'], ['ambient', 'Ambient', '--c1']]},
+  {id: 'h2', title: 'Hydrogen H2 (ppm)', series: [['h2', 'H2', '--c4']], ymin: 0,
+   refs: [[100, 'Caution 100', '--s1'], [700, 'Warning 700', '--s2'], [1800, 'Critical 1800', '--s3']]},
+];
+const CHART_ORDER = ['score', 'voltage', 'current', 'vib', 'temp', 'h2'];
+const CHART_TITLE = {score: 'Health score history', ...Object.fromEntries(SPECS.map(s => [s.id, s.title]))};
+$('charts').innerHTML = CHART_ORDER.map(id =>
+  `<div class="panel"><h2 class="ph">${CHART_TITLE[id]}</h2><div class="chart"><canvas id="c_${id}"></canvas></div></div>`).join('');
+
+const lineOpts = legend => ({
+  responsive: true, maintainAspectRatio: false, spanGaps: false, interaction: {mode: 'index', intersect: false},
+  plugins: {legend: {display: legend, position: 'bottom', labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}}},
+  scales: {x: {ticks: {maxTicksLimit: 5, maxRotation: 0}, grid: {display: false}}, y: {grace: '8%', grid: {color: rgba(css('--line'), 0.8)}}},
+  elements: {point: {radius: 0, hoverRadius: 4}, line: {borderWidth: 2, tension: 0.25}},
+});
+// dashed horizontal limit lines; a line is skipped while it is outside the axis range
+const refPlugin = refs => ({
+  id: 'refs',
+  afterDatasetsDraw(chart) {
+    const {ctx, chartArea: a, scales: {y}} = chart;
+    ctx.save(); ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.font = '11px sans-serif';
+    for (const [val, label, col] of refs) {
+      if (val < y.min || val > y.max) continue;
+      const py = y.getPixelForValue(val);
+      ctx.strokeStyle = ctx.fillStyle = css(col);
+      ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+      ctx.fillText(label, a.left + 4, py - 3);
+    }
+    ctx.restore();
+  },
+});
+const charts = SPECS.map(s => {
+  const opts = lineOpts(s.series.length > 1);
+  if (s.ymin != null) opts.scales.y.min = s.ymin;
+  const single = s.series.length === 1;
+  return {
+    spec: s,
+    chart: new Chart($('c_' + s.id), {
+      type: 'line',
+      plugins: s.refs ? [refPlugin(s.refs)] : [],
+      data: {labels: [], datasets: s.series.map(([, name, col]) => ({
+        label: name, data: [], borderColor: css(col), fill: single,
+        backgroundColor: single ? (ctx => {
+          const {chart} = ctx, a = chart.chartArea; if (!a) return rgba(css(col), 0.1);
+          const g = chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+          g.addColorStop(0, rgba(css(col), 0.28)); g.addColorStop(1, rgba(css(col), 0));
+          return g;
+        }) : undefined,
+      }))},
+      options: opts,
+    }),
+  };
+});
+
+// background bands for the health-score chart (Normal / Caution / Warning / Critical)
+const bandPlugin = {
+  id: 'bands',
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea: a, scales: {y}} = chart;
+    const bands = [[75, 100, '--band0'], [50, 75, '--band1'], [25, 50, '--band2'], [0, 25, '--band3']];
+    ctx.save();
+    for (const [lo, hi, col] of bands) {
+      ctx.fillStyle = css(col);
+      const y1 = y.getPixelForValue(hi), y2 = y.getPixelForValue(lo);
+      ctx.fillRect(a.left, y1, a.right - a.left, y2 - y1);
+    }
+    ctx.restore();
+  },
+};
+const scoreChart = new Chart($('c_score'), {
+  type: 'line',
+  plugins: [bandPlugin],
+  data: {labels: [], datasets: [{label: 'Health score', data: [], borderColor: css('--ink'), borderWidth: 2, tension: 0.2,
+                                 pointRadius: 4, pointBackgroundColor: [], pointBorderColor: css('--panel')}]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {legend: {display: false}},
+    scales: {y: {min: 0, max: 100, ticks: {stepSize: 25}, grid: {display: false}}, x: {ticks: {maxTicksLimit: 6, maxRotation: 0}, grid: {display: false}}},
+  },
+});
+
+function redrawLive() {
+  const slice = H.slice(-range);
+  const labels = slice.map(r => fmtT(r.t));
+  for (const {spec, chart} of charts) {
+    chart.data.labels = labels;
+    spec.series.forEach(([key], i) => { chart.data.datasets[i].data = slice.map(r => r[key] == null ? null : r[key]); });
+    chart.update('none');
+  }
+}
+function redrawScore() {
+  scoreChart.data.labels = P.map(p => fmtT(p.t));
+  scoreChart.data.datasets[0].data = P.map(p => p.score);
+  scoreChart.data.datasets[0].pointBackgroundColor = P.map(p => p.state == null ? css('--sU') : STATE_COLOR[p.state]);
+  scoreChart.update('none');
+}
+
+// ---------- score panel ----------
+const NAMES = {output_voltage_V: 'Voltage (V)', output_current_A: 'Out current (A)', input_current_A: 'In current (A)',
+               vibration_rms_ms2: 'Vibration (m/s²)', oil_temp_C: 'Oil temp (°C)', ambient_temp_C: 'Ambient (°C)',
+               humidity_pct: 'Humidity (%)', h2_ppm: 'H2 (ppm)'};
+
+function showPrediction(p) {
+  const hasScore = p.score != null;
+  const col = p.state == null ? css('--sU') : STATE_COLOR[p.state];
+  $('score').innerHTML = (hasScore ? p.score.toFixed(1) : '--') + '<small>/100</small>';
+  $('statusPanel').style.setProperty('--sc', col);   // tints the whole top-right box with the state colour
+  document.title = hasScore ? `${p.score.toFixed(0)} ${p.state_name} · Transformer Health Monitor` : 'Transformer Health Monitor';
+
+  let m = `Scored at ${fmtT(p.t)}`;
+  if (p.warming_up) m += ' · provisional: the model wants 6 h of history';
+  if (p.status === 'degraded') m += ' · some inputs were missing or held over';
+  if (p.status === 'unscorable') m += ' · cannot score: ' + ((p.notes && p.notes[0]) || 'no valid data');
+  $('scoreMeta').textContent = m;
+
+  STATE_NAMES.forEach((_, i) => {
+    const c = $('chip' + i), on = p.state === i;
+    c.classList.toggle('on', on); c.style.background = on ? STATE_COLOR[i] : '';
+  });
+  $('limits').innerHTML = p.status === 'unscorable' ? '' :
+    `<div>Model: <b>${p.model_state_name}</b> · Safe-limit check: <b>${p.limit_state_name}</b></div>` +
+    (p.overheat ? `<div style="color:${css('--s3')}"><b>Oil overheat:</b> the score is capped in the Critical range</div>` : '') +
+    (p.limit_notes || []).map(n => `<div style="color:${css('--s3')}">${n}</div>`).join('') +
+    (p.range_notes || []).map(n => `<div style="color:${css('--s2')}">Scaling check: ${n}</div>`).join('');
+
+  const h2name = 'H2 (ppm)';
+  $('packet').innerHTML = '<h3>Values used for prediction</h3>' + Object.entries(p.packet || {}).map(([k, v]) =>
+    { const mv = (p.measured || {})[k]; if (mv !== undefined) v = mv;   // show the real measured value (vibration), not the model-scaled one
+      return `<div class="it"><span>${k === 'h2_ppm' ? h2name : (NAMES[k] || k)}</span><b>${v == null ? 'missing' : v}</b></div>`; }).join('');
+
+  const reasons = p.reasons || [];
+  const max = Math.max(1, ...reasons.map(r => Math.abs(r.points)));
+  $('reasons').innerHTML = reasons.length ? reasons.map(r => {
+    const w = Math.abs(r.points) / max * 50, neg = r.points < 0;
+    const val = r.reading == null ? '' : ` (${r.reading.toFixed(2)} ${r.unit})`;
+    return `<div class="reason"><div class="row"><span>${r.label}${val}</span><b>${r.points > 0 ? '+' : ''}${r.points.toFixed(1)}</b></div>
+      <div class="bar"><i style="${neg ? 'right:50%' : 'left:50%'};width:${w}%;background:${neg ? css('--s3') : css('--s0')}"></i></div></div>`;
+  }).join('') : '<div class="empty">No drivers to show for this score.</div>';
+}
+
+function tickCountdown() {
+  const left = meta.window_start + meta.predict_interval - (Date.now() / 1000 + meta.serverOffset);
+  $('countdown').textContent = left > 0
+    ? `Next score in ${Math.floor(left / 60)} min ${String(Math.floor(left % 60)).padStart(2, '0')} s`
+    : 'Scoring now...';
+}
+setInterval(tickCountdown, 1000);
+
+function setConn(on) {
+  $('dot').classList.toggle('on', on);
+  $('connText').textContent = on ? 'live' : 'reconnecting...';
+}
+
+// ---------- model quality footer ----------
+function showModel(m) {
+  if (!m) { $('footNote').textContent = 'Model details are not available (models/thms_model_meta.json was not found).'; return; }
+  const pct = v => v == null ? '--' : (v * 100).toFixed(1) + '%';
+  $('mAcc').textContent = pct(m.accuracy);
+  $('mAccSide').innerHTML = `R² <b>${num(m.r2, 3)}</b> · MAE <b>${num(m.mae, 2)}</b> pts<br>formula baseline ${pct(m.baseline_accuracy)}`;
+  $('mF1').textContent = num(m.macro_f1, 3);
+  $('mF1Side').innerHTML = `RMSE <b>${num(m.rmse, 2)}</b> pts<br>formula baseline ${num(m.baseline_f1, 3)}`;
+  const tag = (k, v) => v == null ? '' : `<span class="tag">${k} <b>${v}</b></span>`;
+  $('mParams').innerHTML = [tag('', m.type), tag('trees', m.trees), tag('leaves', m.leaves), tag('learning rate', num(m.learning_rate, 3)),
+    tag('features', m.features), tag('min leaf', m.min_child_samples), tag('row sample', num(m.subsample, 2)),
+    tag('feature sample', num(m.colsample, 2)), tag('L2', num(m.l2, 2))].join('');
+  $('footNote').textContent = `Accuracy and F1 are measured on the ${m.split || 'validation'} split` +
+    (m.runs ? ` (${m.runs} runs, ${Number(m.rows).toLocaleString()} rows)` : '') + ' that the model was not fitted on.';
+}
+
+// ---------- data ----------
+async function load() {
+  const res = await fetch('/api/history');
+  const d = await res.json();
+  H = d.history; P = d.predictions;
+  meta = {window_start: d.window_start, predict_interval: d.predict_interval, serverOffset: d.server_time - Date.now() / 1000};
+  $('mode').textContent = d.mode === 'simulated' ? 'simulated data' : 'live hardware';
+  $('mode').classList.toggle('sim', d.mode === 'simulated');
+  const notes = d.assumed || [];
+  $('banner').hidden = true;   // notes banner switched off
+  $('bannerTitle').innerHTML = `<b>Read before trusting the score</b> · ${notes.length} note${notes.length === 1 ? '' : 's'}`;
+  $('bannerList').innerHTML = notes.map(a => `<li>${a}</li>`).join('');
+  showModel(d.model);
+  if (H.length) updateCards(H[H.length - 1]);
+  if (P.length) showPrediction(P[P.length - 1]);
+  redrawLive(); redrawScore(); tickCountdown();
+}
+
+function connect() {
+  const es = new EventSource('/stream');
+  let first = true;
+  es.onopen = () => { setConn(true); if (!first) load(); first = false; };   // refill what was missed while offline
+  es.onerror = () => setConn(false);        // EventSource reconnects by itself
+  es.addEventListener('tick', e => {
+    const r = JSON.parse(e.data);
+    H.push(r); if (H.length > 3600) H.shift();
+    updateCards(r); redrawLive();
+  });
+  es.addEventListener('prediction', e => {
+    const p = JSON.parse(e.data);
+    P.push(p); if (P.length > 500) P.shift();
+    meta.window_start = p.t;
+    showPrediction(p); redrawScore();
+  });
+}
+
+$('range').addEventListener('change', e => { range = +e.target.value; redrawLive(); });
+load().then(connect);
+</script>
+</body>
+</html>
